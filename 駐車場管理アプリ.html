@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>マルキヨビル 駐車場管理</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Hiragino Sans','Meiryo',sans-serif;background:#f5f5f5;color:#222;font-size:15px}
+header{background:#1F5C99;color:#fff;padding:14px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
+header h1{font-size:17px;font-weight:500}
+header span{font-size:12px;opacity:.8;margin-left:auto}
+nav{display:flex;background:#fff;border-bottom:1px solid #e0e0e0;overflow-x:auto}
+nav button{flex:1;padding:12px 4px;border:none;background:none;font-size:13px;color:#666;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;min-width:80px}
+nav button.active{color:#1F5C99;border-bottom-color:#1F5C99;font-weight:500}
+.page{display:none;padding:16px}
+.page.active{display:block}
+.card{background:#fff;border-radius:10px;padding:16px;margin-bottom:12px;border:1px solid #e8e8e8}
+.card h3{font-size:14px;color:#555;margin-bottom:10px;font-weight:500}
+.field-label{font-size:13px;color:#666;margin-bottom:4px;display:block}
+.plate-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.plate-grid-4{display:grid;grid-template-columns:1fr 1fr 1fr 2fr;gap:6px;margin-bottom:10px}
+input[type=text],input[type=date],select,textarea{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:18px;font-family:inherit;background:#fff}
+input[type=number]{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:18px;font-family:inherit;background:#fff}
+input.hiragana{ime-mode:active}
+textarea{height:70px;resize:none;margin-bottom:10px}
+.btn{width:100%;padding:12px;border:none;border-radius:8px;font-size:15px;font-weight:500;cursor:pointer;margin-top:10px;margin-bottom:4px}
+.btn-primary{background:#1F5C99;color:#fff}
+.btn-danger{background:#D32F2F;color:#fff}
+.btn-outline{background:#fff;color:#1F5C99;border:1px solid #1F5C99}
+.result-box{padding:14px;border-radius:8px;text-align:center;margin:10px 0}
+.result-ok{background:#E8F5E9;border:1px solid #66BB6A}
+.result-ok .label{color:#2E7D32;font-size:18px;font-weight:500}
+.result-ng{background:#FFEBEE;border:1px solid #EF9A9A}
+.result-ng .label{color:#C62828;font-size:18px;font-weight:500}
+.result-sub{font-size:13px;color:#555;margin-top:4px}
+.badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:500}
+.badge-ng{background:#FFEBEE;color:#C62828}
+.badge-warn{background:#FFF8E1;color:#F57F17}
+.violation-card{background:#fff;border-radius:8px;border:1px solid #e0e0e0;padding:12px;margin-bottom:8px}
+.violation-card.alert{border-left:4px solid #D32F2F}
+.violation-card .plate{font-size:16px;font-weight:500;color:#222}
+.violation-card .meta{font-size:12px;color:#888;margin-top:4px}
+.img-preview{width:100%;max-height:200px;object-fit:cover;border-radius:8px;margin:8px 0;display:none}
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+.stat-card{background:#fff;border-radius:10px;padding:14px;border:1px solid #e8e8e8;text-align:center}
+.stat-num{font-size:28px;font-weight:500;color:#1F5C99}
+.stat-label{font-size:12px;color:#888;margin-top:2px}
+.stat-warn .stat-num{color:#D32F2F}
+.img-thumb{width:60px;height:60px;object-fit:cover;border-radius:6px;margin-right:8px;vertical-align:middle}
+.row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f0f0f0}
+.row:last-child{border-bottom:none}
+.tag{font-size:11px;background:#E3F2FD;color:#0C447C;padding:2px 8px;border-radius:4px}
+.delete-btn{background:none;border:none;color:#D32F2F;font-size:20px;cursor:pointer;padding:4px 8px}
+.empty{text-align:center;padding:32px;color:#aaa;font-size:14px}
+.plate-display{font-size:15px;background:#F3F6FA;border-radius:8px;padding:10px;text-align:center;color:#1F5C99;font-weight:500;margin-bottom:10px;letter-spacing:2px;min-height:40px}
+.hint{font-size:11px;color:#aaa;margin-top:-6px;margin-bottom:8px}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🅿 マルキヨビル 駐車場管理</h1>
+  <span id="clock"></span>
+</header>
+
+<nav>
+  <button class="active" onclick="showPage('check')">照合</button>
+  <button onclick="showPage('violation')">無断登録</button>
+  <button onclick="showPage('list')">違反一覧</button>
+  <button onclick="showPage('staff')">社員車両</button>
+</nav>
+
+<!-- 照合 -->
+<div id="check" class="page active">
+  <div class="card">
+    <h3>ナンバー照合</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div>
+        <span class="field-label">かな</span>
+        <input type="text" id="c-kana" placeholder="あ" maxlength="1" oninput="liveCheck()" style="text-align:center;font-size:32px;padding:14px 8px;ime-mode:active">
+      </div>
+      <div>
+        <span class="field-label">4桁番号</span>
+        <input type="number" id="c-num" placeholder="1234" oninput="liveCheck()" inputmode="numeric" style="font-size:32px;text-align:center;letter-spacing:4px;padding:14px 8px">
+      </div>
+    </div>
+    <div class="plate-display" id="c-display">—</div>
+    <div id="check-result"></div>
+  </div>
+</div>
+
+<!-- 無断駐車登録 -->
+<div id="violation" class="page">
+  <div class="card">
+    <h3>無断駐車を記録</h3>
+    <span class="field-label">ナンバープレート</span>
+    <div class="plate-grid-4" style="margin-top:4px">
+      <div>
+        <span class="field-label" style="font-size:11px;color:#aaa">地名</span>
+        <input type="text" id="v-area" placeholder="沖縄" style="ime-mode:active" oninput="updateVPlate()">
+      </div>
+      <div>
+        <span class="field-label" style="font-size:11px;color:#aaa">分類番号</span>
+        <input type="number" id="v-class" placeholder="500" inputmode="numeric" oninput="updateVPlate()">
+      </div>
+      <div>
+        <span class="field-label" style="font-size:11px;color:#aaa">かな</span>
+        <input type="text" id="v-kana" placeholder="あ" maxlength="1" style="text-align:center;ime-mode:active" oninput="updateVPlate()">
+      </div>
+      <div>
+        <span class="field-label" style="font-size:11px;color:#aaa">4桁</span>
+        <input type="number" id="v-num" placeholder="1234" inputmode="numeric" oninput="updateVPlate()">
+      </div>
+    </div>
+    <div class="plate-display" id="v-plate-display">—</div>
+    <span class="field-label">車種・色</span>
+    <input type="text" id="v-car" placeholder="例：白いプリウス" style="margin-bottom:10px">
+    <span class="field-label">場所</span>
+    <input type="text" id="v-location" placeholder="例：月極区画付近" style="margin-bottom:10px">
+    <span class="field-label">日付</span>
+    <input type="date" id="v-date" style="margin-bottom:10px">
+    <span class="field-label">写真（任意）</span>
+    <input type="file" id="v-photo" accept="image/*" capture="environment" onchange="previewImg()" style="margin-bottom:8px">
+    <img id="v-preview" class="img-preview">
+    <span class="field-label">メモ（任意）</span>
+    <textarea id="v-note" placeholder="気になる点など"></textarea>
+    <button class="btn btn-danger" onclick="addViolation()">記録する</button>
+  </div>
+</div>
+
+<!-- 違反一覧 -->
+<div id="list" class="page">
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-num" id="stat-total">0</div>
+      <div class="stat-label">総違反件数</div>
+    </div>
+    <div class="stat-card stat-warn">
+      <div class="stat-num" id="stat-alert">0</div>
+      <div class="stat-label">⚠ 3回以上</div>
+    </div>
+  </div>
+  <div id="violation-list"></div>
+</div>
+
+<!-- 社員車両 -->
+<div id="staff" class="page">
+  <div class="card">
+    <h3>社員車両を追加</h3>
+    <span class="field-label">ナンバープレート</span>
+    <div class="plate-grid-4" style="margin-top:4px">
+      <div>
+        <span class="field-label" style="font-size:11px;color:#aaa">地名</span>
+        <input type="text" id="s-area" placeholder="沖縄" style="ime-mode:active">
+      </div>
+      <div>
+        <span class="field-label" style="font-size:11px;color:#aaa">分類番号</span>
+        <input type="number" id="s-class" placeholder="500" inputmode="numeric">
+      </div>
+      <div>
+        <span class="field-label" style="font-size:11px;color:#aaa">かな</span>
+        <input type="text" id="s-kana" placeholder="あ" maxlength="1" style="text-align:center;ime-mode:active">
+      </div>
+      <div>
+        <span class="field-label" style="font-size:11px;color:#aaa">4桁</span>
+        <input type="number" id="s-num" placeholder="1234" inputmode="numeric">
+      </div>
+    </div>
+    <span class="field-label">社員氏名</span>
+    <input type="text" id="s-name" placeholder="山田　太郎" style="margin-bottom:10px">
+    <span class="field-label">テナント名</span>
+    <input type="text" id="s-tenant" placeholder="○○ストア" style="margin-bottom:10px">
+    <span class="field-label">車種・色</span>
+    <input type="text" id="s-car" placeholder="白いプリウス" style="margin-bottom:10px">
+    <button class="btn btn-primary" onclick="addStaff()">追加</button>
+  </div>
+  <div class="card">
+    <h3>CSVから一括インポート</h3>
+    <p style="font-size:13px;color:#666;margin-bottom:10px">Excel管理台帳をCSV形式で保存したファイルを選択してください。<br>列順：テナント名・社員氏名・車種・車体色・地名・分類番号・ひらがな・4桁番号</p>
+    <input type="file" id="csv-file" accept=".csv" style="margin-bottom:10px">
+    <button class="btn btn-outline" onclick="importCSV()">CSVを読み込む</button>
+    <div id="csv-result" style="margin-top:10px;font-size:13px"></div>
+  </div>
+  <div class="card">
+    <h3>登録済み社員車両</h3>
+    <div id="staff-list"></div>
+  </div>
+
+  <div id="edit-modal" style="display:none;background:rgba(0,0,0,0.5);position:fixed;top:0;left:0;width:100%;height:100%;z-index:200;overflow-y:auto">
+    <div style="background:#fff;margin:40px 16px;border-radius:12px;padding:20px">
+      <h3 style="font-size:15px;font-weight:500;margin-bottom:14px;color:#555">車両情報を編集</h3>
+      <span class="field-label">ナンバープレート</span>
+      <div class="plate-grid-4" style="margin-top:4px">
+        <div><span class="field-label" style="font-size:11px;color:#aaa">地名</span><input type="text" id="e-area" placeholder="沖縄" style="ime-mode:active"></div>
+        <div><span class="field-label" style="font-size:11px;color:#aaa">分類番号</span><input type="number" id="e-class" placeholder="500" inputmode="numeric"></div>
+        <div><span class="field-label" style="font-size:11px;color:#aaa">かな</span><input type="text" id="e-kana" placeholder="あ" maxlength="1" style="text-align:center;ime-mode:active"></div>
+        <div><span class="field-label" style="font-size:11px;color:#aaa">4桁</span><input type="number" id="e-num" placeholder="1234" inputmode="numeric"></div>
+      </div>
+      <span class="field-label">社員氏名</span>
+      <input type="text" id="e-name" placeholder="山田　太郎" style="margin-bottom:10px">
+      <span class="field-label">テナント名</span>
+      <input type="text" id="e-tenant" placeholder="○○ストア" style="margin-bottom:10px">
+      <span class="field-label">車種・色</span>
+      <input type="text" id="e-car" placeholder="白いプリウス" style="margin-bottom:10px">
+      <span class="field-label">写真（任意）</span>
+      <input type="file" id="e-photo" accept="image/*" capture="environment" onchange="previewEditImg()" style="margin-bottom:8px">
+      <img id="e-preview" class="img-preview">
+      <button class="btn btn-primary" onclick="saveEdit()">保存</button>
+      <button class="btn btn-outline" onclick="closeEdit()" style="margin-top:6px">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const ALERT_COUNT = 3;
+let staffList = JSON.parse(localStorage.getItem('staffList') || '[]');
+let violationList = JSON.parse(localStorage.getItem('violationList') || '[]');
+
+function save() {
+  localStorage.setItem('staffList', JSON.stringify(staffList));
+  localStorage.setItem('violationList', JSON.stringify(violationList));
+}
+
+function buildPlate(area, cls, kana, num) {
+  if (!area && !cls && !kana && !num) return '';
+  return [area, cls, kana, num].filter(Boolean).join(' ');
+}
+
+function normPlate(p) {
+  return p.replace(/\s/g,'').replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0)-0xFEE0)).toLowerCase();
+}
+
+function findStaff(plate) {
+  const n = normPlate(plate);
+  return staffList.find(s => normPlate(s.plate) === n);
+}
+
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  const idx = ['check','violation','list','staff'].indexOf(id);
+  document.querySelectorAll('nav button')[idx].classList.add('active');
+  if (id === 'list') renderViolations();
+  if (id === 'staff') renderStaff();
+}
+
+function liveCheck() {
+  const kana = document.getElementById('c-kana').value.trim();
+  const num  = document.getElementById('c-num').value.trim();
+  document.getElementById('c-display').textContent = (kana || num) ? `${kana} ${num}` : '—';
+  const box = document.getElementById('check-result');
+  if (!kana && !num) { box.innerHTML = ''; return; }
+  const normK = kana.replace(/[ァ-ン]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60)).toLowerCase();
+  const matched = staffList.filter(s => {
+    const p = normPlate(s.plate);
+    const kanaMatch = !kana || p.includes(normK);
+    const numMatch  = !num  || p.includes(num.replace(/\s/g,''));
+    return kanaMatch && numMatch;
+  });
+  const vPlate = `${kana}${num}`;
+  const cnt = violationList.filter(v => {
+    const p = normPlate(v.plate);
+    const normK2 = kana.replace(/[ァ-ン]/g, c => String.fromCharCode(c.charCodeAt(0)-0x60)).toLowerCase();
+    return (!kana || p.includes(normK2)) && (!num || p.includes(num));
+  }).length;
+  if (matched.length > 0) {
+    box.innerHTML = matched.map(s => `<div class="result-box result-ok">
+      <div class="label">✅ 登録済み社員車両</div>
+      <div class="result-sub">${s.plate}<br>${s.name}（${s.tenant}）　${s.car}</div>
+    </div>`).join('');
+  } else {
+    const warn = cnt >= ALERT_COUNT ? `⚠ 違反${cnt}回 — 要注意` : cnt > 0 ? `違反記録あり（${cnt}回）` : '未登録車両';
+    box.innerHTML = `<div class="result-box result-ng">
+      <div class="label">❌ 未登録車両</div>
+      <div class="result-sub">${warn}</div>
+    </div>
+    <button class="btn btn-outline" onclick="gotoViolation('','','${kana}','${num}')">この車両を無断駐車として記録</button>`;
+  }
+}
+
+function gotoViolation(area, cls, kana, num) {
+  showPage('violation');
+  document.getElementById('v-area').value = area;
+  document.getElementById('v-class').value = cls;
+  document.getElementById('v-kana').value = kana;
+  document.getElementById('v-num').value = num;
+  updateVPlate();
+}
+
+function updateVPlate() {
+  const area = document.getElementById('v-area').value.trim();
+  const cls  = document.getElementById('v-class').value.trim();
+  const kana = document.getElementById('v-kana').value.trim();
+  const num  = document.getElementById('v-num').value.trim();
+  document.getElementById('v-plate-display').textContent = buildPlate(area,cls,kana,num) || '—';
+}
+
+function previewImg() {
+  const file = document.getElementById('v-photo').files[0];
+  const img = document.getElementById('v-preview');
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = e => { img.src = e.target.result; img.style.display = 'block'; };
+    reader.readAsDataURL(file);
+  }
+}
+
+function addViolation() {
+  const area = document.getElementById('v-area').value.trim();
+  const cls  = document.getElementById('v-class').value.trim();
+  const kana = document.getElementById('v-kana').value.trim();
+  const num  = document.getElementById('v-num').value.trim();
+  const plate = buildPlate(area, cls, kana, num);
+  if (!plate) { alert('ナンバーを入力してください'); return; }
+  const imgEl = document.getElementById('v-preview');
+  violationList.unshift({
+    id: Date.now(), plate,
+    car: document.getElementById('v-car').value.trim(),
+    location: document.getElementById('v-location').value.trim(),
+    date: document.getElementById('v-date').value || new Date().toISOString().split('T')[0],
+    note: document.getElementById('v-note').value.trim(),
+    image: imgEl.style.display !== 'none' ? imgEl.src : null,
+    registeredAt: new Date().toLocaleString('ja-JP')
+  });
+  save();
+  ['v-area','v-class','v-kana','v-num','v-car','v-location','v-note'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('v-plate-display').textContent = '—';
+  imgEl.src = ''; imgEl.style.display = 'none';
+  document.getElementById('v-photo').value = '';
+  document.getElementById('v-date').value = new Date().toISOString().split('T')[0];
+  alert('記録しました');
+}
+
+function renderViolations() {
+  const el = document.getElementById('violation-list');
+  const counts = {};
+  violationList.forEach(v => { const k = normPlate(v.plate); counts[k] = (counts[k]||0)+1; });
+  document.getElementById('stat-total').textContent = violationList.length;
+  document.getElementById('stat-alert').textContent = Object.values(counts).filter(c => c >= ALERT_COUNT).length;
+  const grouped = {};
+  violationList.forEach(v => { const k = normPlate(v.plate); if (!grouped[k]) grouped[k]=[]; grouped[k].push(v); });
+  const sorted = Object.entries(grouped).sort((a,b) => b[1].length - a[1].length);
+  if (!sorted.length) { el.innerHTML = '<div class="empty">違反記録はありません</div>'; return; }
+  el.innerHTML = sorted.map(([key, records]) => {
+    const cnt = records.length;
+    const isAlert = cnt >= ALERT_COUNT;
+    const latest = records[0];
+    const imgHtml = latest.image ? `<img src="${latest.image}" class="img-thumb">` : '';
+    return `<div class="violation-card ${isAlert?'alert':''}">
+      <div style="display:flex;align-items:center;gap:8px">
+        ${imgHtml}
+        <div style="flex:1">
+          <div class="plate">${latest.plate}</div>
+          <div class="meta">${latest.car||'—'}　${latest.location||'—'}</div>
+          <div style="margin-top:6px"><span class="${isAlert?'badge badge-ng':'badge badge-warn'}">違反${cnt}回${isAlert?' ⚠要注意':''}</span></div>
+        </div>
+        <button class="delete-btn" onclick="deleteViolation('${key}')">🗑</button>
+      </div>
+      <div style="font-size:12px;color:#999;margin-top:6px">最終：${latest.date}　${latest.registeredAt}</div>
+      ${latest.note?`<div style="font-size:13px;color:#555;margin-top:4px">${latest.note}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function deleteViolation(key) {
+  if (!confirm('この車両の違反記録をすべて削除しますか？')) return;
+  violationList = violationList.filter(v => normPlate(v.plate) !== key);
+  save(); renderViolations();
+}
+
+function addStaff() {
+  const area = document.getElementById('s-area').value.trim();
+  const cls  = document.getElementById('s-class').value.trim();
+  const kana = document.getElementById('s-kana').value.trim();
+  const num  = document.getElementById('s-num').value.trim();
+  const plate = buildPlate(area, cls, kana, num);
+  const name   = document.getElementById('s-name').value.trim();
+  const tenant = document.getElementById('s-tenant').value.trim();
+  const car    = document.getElementById('s-car').value.trim();
+  if (!plate || !name) { alert('ナンバーと氏名は必須です'); return; }
+  if (findStaff(plate)) { alert('このナンバーはすでに登録済みです'); return; }
+  staffList.push({ id: Date.now(), plate, name, tenant, car });
+  save();
+  ['s-area','s-class','s-kana','s-num','s-name','s-tenant','s-car'].forEach(id => document.getElementById(id).value = '');
+  renderStaff();
+}
+
+function deleteStaff(id) {
+  if (!confirm('この社員車両を削除しますか？')) return;
+  staffList = staffList.filter(s => s.id !== id);
+  save(); renderStaff();
+}
+
+function renderStaff() {
+  const el = document.getElementById('staff-list');
+  if (!staffList.length) { el.innerHTML = '<div class="empty">登録された社員車両はありません</div>'; return; }
+  el.innerHTML = staffList.map(s => `
+    <div class="row">
+      <div style="display:flex;align-items:center;gap:8px;flex:1">
+        ${s.image ? `<img src="${s.image}" class="img-thumb">` : ''}
+        <div>
+          <div style="font-weight:500">${s.plate}</div>
+          <div style="font-size:13px;color:#555">${s.name}　<span class="tag">${s.tenant}</span></div>
+          <div style="font-size:12px;color:#999">${s.car}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:4px">
+        <button style="background:none;border:none;color:#1F5C99;font-size:20px;cursor:pointer;padding:4px 8px" onclick="openEdit(${s.id})">✏️</button>
+        <button class="delete-btn" onclick="deleteStaff(${s.id})">🗑</button>
+      </div>
+    </div>`).join('');
+}
+
+function importCSV() {
+  const file = document.getElementById('csv-file').files[0];
+  const resultEl = document.getElementById('csv-result');
+  if (!file) { resultEl.innerHTML = '<span style="color:#D32F2F">ファイルを選択してください</span>'; return; }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    let added = 0, skipped = 0, errors = [];
+    lines.forEach((line, idx) => {
+      if (idx === 0 && (line.includes('テナント') || line.includes('No') || line.includes('区分'))) return;
+      const cols = line.split(',').map(c => c.replace(/^"|"$/g,'').trim());
+      if (cols.length < 8) { errors.push(`${idx+1}行目：列数不足`); return; }
+      const tenant = cols[0] || '';
+      const name   = cols[1] || '';
+      const car    = cols[2] || '';
+      const color  = cols[3] || '';
+      const area   = cols[4] || '';
+      const cls    = cols[5] || '';
+      const kana   = cols[6] || '';
+      const num    = cols[7] || '';
+      if (!name || !area || !num) { skipped++; return; }
+      const plate = buildPlate(area, cls, kana, num);
+      if (findStaff(plate)) { skipped++; return; }
+      staffList.push({
+        id: Date.now() + Math.random(),
+        plate, name, tenant,
+        car: [car, color].filter(Boolean).join(' ')
+      });
+      added++;
+    });
+    save();
+    renderStaff();
+    let msg = `<span style="color:#2E7D32">✅ ${added}件追加しました</span>`;
+    if (skipped > 0) msg += `<br><span style="color:#F57F17">⚠ ${skipped}件スキップ（重複または必須項目不足）</span>`;
+    if (errors.length > 0) msg += `<br><span style="color:#D32F2F">${errors.join('<br>')}</span>`;
+    resultEl.innerHTML = msg;
+    document.getElementById('csv-file').value = '';
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+
+function previewEditImg() {
+  const file = document.getElementById('e-photo').files[0];
+  const img = document.getElementById('e-preview');
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = e => { img.src = e.target.result; img.style.display = 'block'; };
+    reader.readAsDataURL(file);
+  }
+}
+
+let editingId = null;
+
+function openEdit(id) {
+  const s = staffList.find(s => s.id === id);
+  if (!s) return;
+  editingId = id;
+  const parts = s.plate.split(' ');
+  document.getElementById('e-area').value   = parts[0] || '';
+  document.getElementById('e-class').value  = parts[1] || '';
+  document.getElementById('e-kana').value   = parts[2] || '';
+  document.getElementById('e-num').value    = parts[3] || '';
+  document.getElementById('e-name').value   = s.name;
+  document.getElementById('e-tenant').value = s.tenant;
+  document.getElementById('e-car').value    = s.car;
+  document.getElementById('e-photo').value  = '';
+  const imgEl = document.getElementById('e-preview');
+  if (s.image) { imgEl.src = s.image; imgEl.style.display = 'block'; }
+  else { imgEl.src = ''; imgEl.style.display = 'none'; }
+  document.getElementById('edit-modal').style.display = 'block';
+}
+
+function closeEdit() {
+  document.getElementById('edit-modal').style.display = 'none';
+  editingId = null;
+}
+
+function saveEdit() {
+  const area   = document.getElementById('e-area').value.trim();
+  const cls    = document.getElementById('e-class').value.trim();
+  const kana   = document.getElementById('e-kana').value.trim();
+  const num    = document.getElementById('e-num').value.trim();
+  const plate  = buildPlate(area, cls, kana, num);
+  const name   = document.getElementById('e-name').value.trim();
+  const tenant = document.getElementById('e-tenant').value.trim();
+  const car    = document.getElementById('e-car').value.trim();
+  if (!plate || !name) { alert('ナンバーと氏名は必須です'); return; }
+  const idx = staffList.findIndex(s => s.id === editingId);
+  if (idx === -1) return;
+  const imgEl = document.getElementById('e-preview');
+  const image = imgEl.style.display !== 'none' && imgEl.src ? imgEl.src : (staffList[idx].image || null);
+  staffList[idx] = { ...staffList[idx], plate, name, tenant, car, image };
+  save();
+  renderStaff();
+  closeEdit();
+}
+
+function updateClock() {
+  document.getElementById('clock').textContent =
+    new Date().toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+updateClock(); setInterval(updateClock, 10000);
+document.getElementById('v-date').value = new Date().toISOString().split('T')[0];
+</script>
+</body>
+</html>
