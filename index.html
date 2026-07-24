@@ -176,7 +176,13 @@ textarea{height:70px;resize:none;margin-bottom:10px}
     <button class="btn btn-primary" onclick="addStaff()">追加</button>
   </div>
   <div class="card">
-    <h3>CSVから一括インポート</h3>
+    <h3>データのバックアップ</h3>
+    <p style="font-size:13px;color:#666;margin-bottom:12px">全データ（社員車両・無断駐車記録）をファイルに保存したり、別の端末から読み込めます。</p>
+    <button class="btn btn-outline" onclick="exportData()" style="margin-bottom:8px">📥 データを書き出す</button>
+    <button class="btn btn-outline" onclick="document.getElementById('import-file').click()">📤 データを読み込む</button>
+    <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData()">
+    <div id="backup-result" style="margin-top:10px;font-size:13px"></div>
+  </div>
     <p style="font-size:13px;color:#666;margin-bottom:10px">Excel管理台帳をCSV形式で保存したファイルを選択してください。<br>列順：テナント名・社員氏名・車種・車体色・地名・分類番号・ひらがな・4桁番号</p>
     <input type="file" id="csv-file" accept=".csv" style="margin-bottom:10px">
     <button class="btn btn-outline" onclick="importCSV()">CSVを読み込む</button>
@@ -455,6 +461,39 @@ function importCSV() {
   reader.readAsText(file, 'UTF-8');
 }
 
+
+function exportData() {
+  const data = { staffList, violationList, exportedAt: new Date().toLocaleString('ja-JP') };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `駐車場データ_${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  document.getElementById('backup-result').innerHTML = '<span style="color:#2E7D32">✅ データを書き出しました</span>';
+}
+
+function importData() {
+  const file = document.getElementById('import-file').files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.staffList || !data.violationList) throw new Error('形式エラー');
+      if (!confirm(`書き出し日時：${data.exportedAt}\n\n現在のデータに上書きしますか？`)) return;
+      staffList = data.staffList;
+      violationList = data.violationList;
+      save();
+      renderStaff();
+      document.getElementById('backup-result').innerHTML =
+        `<span style="color:#2E7D32">✅ 読み込み完了（社員：${staffList.length}件・違反：${violationList.length}件）</span>`;
+    } catch(e) {
+      document.getElementById('backup-result').innerHTML = '<span style="color:#D32F2F">❌ ファイルの形式が正しくありません</span>';
+    }
+    document.getElementById('import-file').value = '';
+  };
+  reader.readAsText(file);
+}
 
 function previewEditImg() {
   const file = document.getElementById('e-photo').files[0];
