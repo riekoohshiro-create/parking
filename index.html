@@ -429,17 +429,24 @@ function importCSV() {
     const lines = text.split('\n').map(l => l.trim()).filter(l => l);
     let added = 0, skipped = 0, errors = [];
     lines.forEach((line, idx) => {
-      if (idx === 0 && (line.includes('テナント') || line.includes('No') || line.includes('区分'))) return;
+      // タイトル行・ヘッダー行をスキップ
+      if (line.includes('テナント名') || line.includes('No.') || line.includes('社員車両') || line.includes('マルキヨ')) return;
       const cols = line.split(',').map(c => c.replace(/^"|"$/g,'').trim());
-      if (cols.length < 8) { errors.push(`${idx+1}行目：列数不足`); return; }
-      const tenant = cols[0] || '';
-      const name   = cols[1] || '';
-      const car    = cols[2] || '';
-      const color  = cols[3] || '';
-      const area   = cols[4] || '';
-      const cls    = cols[5] || '';
-      const kana   = cols[6] || '';
-      const num    = cols[7] || '';
+      if (cols.length < 2) return;
+
+      // No.列がある場合（A列がNo.）とない場合の両方に対応
+      let offset = 0;
+      if (cols[0].match(/^\d+$/) || cols[0] === '') offset = 1;
+
+      const tenant = cols[offset]     || '';
+      const name   = cols[offset + 1] || '';
+      const car    = cols[offset + 2] || '';
+      const color  = cols[offset + 3] || '';
+      const area   = cols[offset + 4] || '';
+      const cls    = cols[offset + 5] || '';
+      const kana   = cols[offset + 6] || '';
+      const num    = cols[offset + 7] || '';
+
       if (!name || !area || !num) { skipped++; return; }
       const plate = buildPlate(area, cls, kana, num);
       if (findStaff(plate)) { skipped++; return; }
